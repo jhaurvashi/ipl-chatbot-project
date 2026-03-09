@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IPL Analytics Chatbot</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>IPL Analytics Chatbot</h1>
+            <p>Ask quick questions about IPL top scorers and champions by year.</p>
+        </header>
+
+        <main>
+            <section class="card">
+                <h2>Overall Top Scorer</h2>
+                <p class="help-text">Find the player with the highest total runs across all matches in the dataset.</p>
+                <button id="btn-top-scorer">Get Top Scorer</button>
+                <div id="top-scorer-result" class="result-panel"></div>
+            </section>
+
+            <section class="card">
+                <h2>IPL Winner by Year</h2>
+                <p class="help-text">Enter a season year (e.g. 2016) to see which team won the most matches.</p>
+                <form id="winner-form">
+                    <label for="year-input">Season year</label>
+                    <input id="year-input" name="year" type="number" min="2008" max="2100" required>
+                    <button type="submit">Get Winner</button>
+                </form>
+                <div id="winner-result" class="result-panel"></div>
+            </section>
+
+            <section class="card">
+                <h2>Chat with IPL Bot</h2>
+                <p class="help-text">Type a question like &ldquo;Who is the top scorer?&rdquo; and I&apos;ll call the Flask API for you.</p>
+                <div id="chat-log" class="chat-log">
+                    <div class="chat-message bot">
+                        <span class="chat-label">Bot</span>
+                        <span>Hi! Ask me about the <strong>top scorer</strong> and I&apos;ll fetch the live result.</span>
+                    </div>
+                </div>
+                <form id="chat-form" class="chat-form">
+                    <input id="chat-input" type="text" placeholder="Ask about the top scorer..." autocomplete="off" required />
+                    <button type="submit">Send</button>
+                </form>
+            </section>
+        </main>
+
+        <footer>
+            <small>Backend: Flask · Ready for IBM Cloud deployment</small>
+        </footer>
+    </div>
+
+    <script>
+        async function fetchTopScorer() {
+            const resultEl = document.getElementById('top-scorer-result');
+            resultEl.textContent = 'Loading...';
+            try {
+                const res = await fetch('/api/top-scorer');
+                const data = await res.json();
+                if (!res.ok) {
+                    resultEl.textContent = data.error || 'Failed to fetch top scorer.';
+                    resultEl.classList.add('error');
+                    return;
+                }
+                resultEl.classList.remove('error');
+                resultEl.innerHTML = `
+                    <strong>${data.player}</strong> is the top scorer with
+                    <strong>${data.total_runs}</strong> total runs.
+                `;
+            } catch (err) {
+                resultEl.textContent = 'Unexpected error while fetching top scorer.';
+                resultEl.classList.add('error');
+            }
+        }
+
+        async function fetchTopScorerForChat() {
+            const res = await fetch('/api/top-scorer');
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || 'Failed to fetch top scorer.');
+            }
+            return data;
+        }
+
+        async function fetchWinnerByYear(year) {
+            const resultEl = document.getElementById('winner-result');
+            resultEl.textContent = 'Loading...';
+            try {
+                const res = await fetch('/api/winner-by-year?year=' + encodeURIComponent(year));
+                const data = await res.json();
+                if (!res.ok) {
+                    resultEl.textContent = data.error || 'Failed to fetch winner.';
+                    resultEl.classList.add('error');
+                    return;
+                }
+                resultEl.classList.remove('error');
+                resultEl.innerHTML = `
+                    In <strong>${data.year}</strong>, the top team was
+                    <strong>${data.team}</strong> with
+                    <strong>${data.wins}</strong> wins.
+                `;
+            } catch (err) {
+                resultEl.textContent = 'Unexpected error while fetching winner.';
+                resultEl.classList.add('error');
+            }
+        }
+
+        function appendChatMessage(sender, text) {
+            const log = document.getElementById('chat-log');
+            const wrapper = document.createElement('div');
+            wrapper.className = 'chat-message ' + (sender === 'user' ? 'user' : 'bot');
+
+            const label = document.createElement('span');
+            label.className = 'chat-label';
+            label.textContent = sender === 'user' ? 'You' : 'Bot';
+
+            const body = document.createElement('span');
+            body.innerHTML = text;
+
+            wrapper.appendChild(label);
+            wrapper.appendChild(body);
+            log.appendChild(wrapper);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        async function handleChatSubmit(event) {
+            event.preventDefault();
+            const input = document.getElementById('chat-input');
+            const raw = (input.value || '').trim();
+            if (!raw) return;
+
+            appendChatMessage('user', raw);
+            input.value = '';
+
+            const text = raw.toLowerCase();
+            if (text.includes('top scorer') || text.includes('topscorer')) {
+                try {
+                    const data = await fetchTopScorerForChat();
+                    appendChatMessage(
+                        'bot',
+                        `The current top scorer is <strong>${data.player}</strong> with <strong>${data.total_runs}</strong> total runs (from the live Flask API).`
+                    );
+                } catch (err) {
+                    appendChatMessage('bot', 'Sorry, I could not fetch the top scorer right now.');
+                }
+            } else {
+                appendChatMessage('bot', 'Right now I can answer questions about the <strong>top scorer</strong>. Try asking: “Who is the top scorer?”');
+            }
+        }
+
+        document.getElementById('btn-top-scorer').addEventListener('click', function () {
+            fetchTopScorer();
+        });
+
+        document.getElementById('winner-form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const year = document.getElementById('year-input').value;
+            if (year) {
+                fetchWinnerByYear(year);
+            }
+        });
+
+        document.getElementById('chat-form').addEventListener('submit', handleChatSubmit);
+    </script>
+    <script>
+      window.watsonAssistantChatOptions = {
+        integrationID: "1d8e8736-f372-4fbd-a387-995e82220518", // The ID of this integration.
+        region: "au-syd", // The region your integration is hosted in.
+        serviceInstanceID: "b59c326c-ce2e-498f-919a-8e5d0c7cfe11", // The ID of your service instance.
+        onLoad: async (instance) => { await instance.render(); }
+      };
+      setTimeout(function(){
+        const t=document.createElement('script');
+        t.src="https://web-chat.global.assistant.watson.appdomain.cloud/versions/" + (window.watsonAssistantChatOptions.clientVersion || 'latest') + "/WatsonAssistantChatEntry.js";
+        document.head.appendChild(t);
+      });
+    </script>
+</body>
+</html>
+
